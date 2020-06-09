@@ -1,0 +1,181 @@
+#pragma comment(lib, "ws2_32.lib")
+#include <winsock2.h>
+#include <iostream>
+#include <string.h>
+#include <stdio.h>
+using namespace std;
+
+int main(int argc, char* argv[]) 
+{
+	WSAData wsaData;
+	WORD DLLVersion = MAKEWORD(2, 1);
+	if (WSAStartup(DLLVersion, &wsaData) != 0) 
+	{
+		cout << "Error" << endl;
+		return -1;
+	}
+
+	SOCKADDR_IN addr;
+	int sizeofaddr = sizeof(addr);
+	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	addr.sin_port = htons(1111);
+	addr.sin_family = AF_INET;
+
+	SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL); // создаем сокет для соединения с сервером
+	if (connect(Connection, (SOCKADDR*)&addr, sizeof(addr)) != 0) 
+	{
+		std::cout << "Error: failed connect to server.\n";
+		return -1;
+	}
+	cout << "Connected!\n";
+	
+	char file_name[11] = "photo.png";
+
+	FILE* in = fopen("photo.png", "rb"); // открываем бинарник для чтения 
+	if (in == NULL)
+	{
+		printf("Error \n");
+		return -1;
+	}
+
+	//вычисляем длину файла
+	fseek(in, 0, SEEK_END);
+	int file_end = ftell(in);
+	fseek(in, 0, SEEK_SET);
+	int file_start = ftell(in);
+	int file_length = file_end - file_start;
+
+	
+	if (send(Connection, file_name, sizeof(file_name), NULL) < 0) // отправляем название файла
+	{
+		cout << "Request failed" << endl;
+		return -1;
+	}
+	if (send(Connection, (const char*)&file_length, sizeof(int), NULL) < 0) // отправляем длину файла
+	{
+		cout << "Request failed" << endl;
+		return -1;
+	}
+	
+	// Для передачи бинарника на сервер разобьем его на равные части по 256 байтов и вычислим остаток от деления длины на 256
+	int total = file_length / 512;
+	int remains = file_length % 512;
+
+	char part[512];
+	char a;
+	
+	fseek(in, 0, SEEK_SET);
+	int pointer = 0;
+	for (int i = 0; i < total; i++)
+	{
+		for (int j = 0; j < 512; j++)
+		{  
+			fread((char*)&a, sizeof(char), 1, in);
+			part[j] = a;
+			pointer++;
+			fseek(in, pointer, SEEK_SET);
+		}
+		if (send(Connection, part, sizeof(part), NULL) < 0) 
+		{
+			cout << "Sending error" << endl;
+			return -1;
+		}
+	}
+
+	if (remains != 0)
+	{
+		for (int i = 0; i < remains; i++) 
+		{
+			fread((char*)&a, sizeof(char), 1, in);
+			part[i] = a;
+			pointer++;
+			fseek(in, pointer, SEEK_SET);
+		}
+		if (send(Connection, part, sizeof(part), NULL) < 0) 
+		{
+			cout << "Sending error" << endl;
+			return -1;
+		}
+	}
+
+	int width, length, bits_per_pixel, png;
+	if (recv(Connection, (char*)&png, sizeof(int), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	if (png == 1)
+	{
+		cout << "This is png format" << endl;
+	}
+	else { cout << "This is not png format" << endl; return -1; }
+	if (recv(Connection, (char*)&width, sizeof(int), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	cout << "width is - " << width << endl;
+	if (recv(Connection, (char*)&length, sizeof(int), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+			return -1;
+	}
+	cout << "length is - " << length << endl;
+	if (recv(Connection, (char*)&bits_per_pixel, sizeof(int), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+			return -1;
+	}
+	cout << "bpp is - " << bits_per_pixel << endl;
+
+	uint8_t bit_depth, color_type, compression_method, filter_method, interlace_method;
+	if (recv(Connection, (char*)&bit_depth, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	printf("bit depth is - %x \n", bit_depth);
+	if (recv(Connection, (char*)&color_type, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	switch (color_type)
+	{
+	case 0:
+		cout << "color type is grayscale" << endl;
+	case 2:
+		cout << "color type is RGB" << endl;
+		break;
+	case 3:
+		cout << "color type is indexed values" << endl;
+		break;
+	case 4:
+		cout << "color type is grayscale and alpha channel" << endl;
+		break;
+	case 6:
+		cout << "color type is RGBA" << endl;
+	}
+	if (recv(Connection, (char*)&compression_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	printf("compression method is - %x \n", compression_method);
+	if (recv(Connection, (char*)&filter_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	printf("filter method is - %x \n", filter_method);
+	if (recv(Connection, (char*)&interlace_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Transmission error" << endl;
+		return -1;
+	}
+	printf("interlace method is - %x \n", interlace_method);
+
+	fclose(in);
+	system("pause");
+	return 0;
+}
