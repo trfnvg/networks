@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
 	}
 	cout << "Connected!\n";
 	
-	char file_name[11] = "photo.png";
+	char file_name[10] = "photo.png";
 
 	FILE* in = fopen("photo.png", "rb"); // открываем бинарник для чтения 
 	if (in == NULL)
