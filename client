@@ -176,6 +176,7 @@ int main(int argc, char* argv[])
 	printf("interlace method is - %x \n", interlace_method);
 
 	fclose(in);
+	closesocket(Connection);
 	system("pause");
 	return 0;
 }
