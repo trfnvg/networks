@@ -1,0 +1,215 @@
+#pragma comment(lib, "ws2_32.lib")
+#include <winsock2.h>
+#include <iostream>
+using namespace std;
+#pragma warning(disable: 4996)
+
+uint16_t swap_byte16(uint16_t word) // Меняет местами байты
+{
+	return (word << 8) | (word >> 8);
+}
+
+uint32_t swap_byte32(uint32_t word)
+{
+	return (((word & 0xFF) << 24) | ((word & 0xFF00) << 8) | ((word & 0xFF0000) >> 8) | ((word & 0xFF000000) >> 24));
+}
+
+void Function(FILE* in, int& width, int& length, int& bits_per_pixel, int& png, uint8_t& bit_depth, uint8_t& color_type, uint8_t& compression_method, uint8_t& filter_method, uint8_t& interlace_method)
+{
+	uint16_t d; uint8_t c[5], f[4]; int channels;
+	fseek(in, 1, SEEK_SET);     // Проверяем на PNG-формат
+	fread(f, sizeof(uint8_t), 3, in);
+	if (f[0] == 80 && f[1] == 78 && f[2] == 71) { png++; }
+	fseek(in, 18, SEEK_SET);              //Выводим размеры изображения
+	fread(&d, sizeof(uint16_t), 2, in);
+	length = swap_byte16(d);
+	fseek(in, 22, SEEK_SET);
+	fread(&d, sizeof(uint16_t), 2, in);
+	width = swap_byte16(d);
+	fseek(in, 24, SEEK_SET);         // Выведем информацию из чанка IHDR, посчитаем количество битов необходимое для кодирование одного пикселя
+	fread(c, sizeof(uint8_t), 5, in);
+	bit_depth = c[0];
+	color_type = c[1];
+	compression_method = c[2];
+	filter_method = c[3];
+	interlace_method = c[4];
+	switch (c[1])
+	{
+	case 0:
+		channels = 1; 
+		bits_per_pixel = channels * c[0] / 8;
+		break;
+	case 2:
+		channels = 3; 
+		bits_per_pixel = channels * c[0] / 8;
+		break;
+	case 3:
+		channels = 1; 
+		bits_per_pixel = channels * c[0] / 8;
+		break;
+	case 4:
+		channels = 2;  
+		bits_per_pixel = channels * c[0] / 8;
+		break;
+	case 6:
+		channels = 4;  
+		bits_per_pixel = channels * c[0] / 8;
+	}
+}
+
+
+int main(int argc, char* argv[]) 
+{
+	WSAData wsaData; //создаем структуру wsa data
+	WORD DLLVersion = MAKEWORD(2, 1); // запрашиваемая версия библиотеки winsock
+	if (WSAStartup(DLLVersion, &wsaData) != 0) // проверяем загрузилась ли библиотека
+	{
+		cout << "Error loading the library" << endl;
+		return -1;
+	}
+
+    // Заполним информацию об адресе сокета
+	SOCKADDR_IN addr; 
+	int sizeofaddr = sizeof(addr);
+	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	addr.sin_port = htons(1111);
+	addr.sin_family = AF_INET;
+
+	SOCKET sListen = socket(AF_INET, SOCK_STREAM, NULL); // создали сокет
+	bind(sListen, (SOCKADDR*)&addr, sizeof(addr)); // привязываем адрес сокету
+	listen(sListen, SOMAXCONN); // прослушивание порта в ожидании соединения клиента
+
+	SOCKET newConnection; // объявляем новый сокет для удержания связи с клиентом
+	newConnection = accept(sListen, (SOCKADDR*)&addr, &sizeofaddr);
+
+	if (newConnection == 0)
+	{
+		cout << "Socket creation error \n";
+	}
+	else
+	{
+		cout << "Client Connected!\n";
+
+		int file_length;
+		char file_name[11];
+		if (recv(newConnection, file_name, sizeof(file_name), NULL) < 0) // получаем на сервер имя файла
+		{
+			cout << "Transmission error" << endl;
+			return -1;
+		}
+		cout << "File name - " << file_name << endl;
+
+		if (recv(newConnection, (char*)&file_length, sizeof(int), NULL) < 0) // получаем на сервер длину файла 
+		{
+			cout << "Transmission error" << endl;
+			return -1;
+		}
+		
+		FILE* out = fopen("photo1.png", "wb"); // открываем бинарник для записи 
+		if (out == NULL)
+		{
+			printf("File opening error \n");
+			return -1;
+		}
+
+		int total = file_length / 512;
+		int remains = file_length % 512;
+		char part[512];
+		char a;
+
+		fseek(out, 0, SEEK_SET);
+		int pointer = 0;
+		for (int i = 0; i < total; i++)
+		{
+			if (recv(newConnection, part, sizeof(part), NULL) != 512)
+			{
+				cout << "Transmission error" << endl;
+				return -1;
+			}
+			for (int j = 0; j < 512; j++)
+			{
+				a = part[j];
+				fwrite((char*)&a, sizeof(char), 1, out);
+				pointer++;
+				fseek(out, pointer, SEEK_SET);
+			}
+		}
+		if (remains != 0)
+		{
+			if (recv(newConnection, part, sizeof(part), NULL) < 0)
+			{
+				cout << "Transmission error" << endl;
+				return -1;
+			}
+			for (int j = 0; j < remains; j++)
+			{
+				a = part[j];
+				fwrite((char*)&a, sizeof(char), 1, out);
+				pointer++;
+				fseek(out, pointer, SEEK_SET);
+			}
+		}
+		fclose(out);
+	}
+	
+	FILE* in = fopen("photo1.png", "rb"); //открываем бинарник для чтения 
+	if (in == NULL)
+	{
+		printf("File opening error \n");
+		return -1;
+	}
+	int width, length, bits_per_pixel, png = 0;
+	uint8_t bit_depth, color_type, compression_method, filter_method, interlace_method;
+
+	Function(in, width, length, bits_per_pixel, png, bit_depth, color_type, compression_method, filter_method, interlace_method);
+
+	if (send(newConnection, (const char*)&png, sizeof(int), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&width, sizeof(int), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&length, sizeof(int), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&bits_per_pixel, sizeof(int), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&bit_depth, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&color_type, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&compression_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&filter_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+	if (send(newConnection, (const char*)&interlace_method, sizeof(uint8_t), NULL) < 0)
+	{
+		cout << "Sending error" << endl;
+		return -1;
+	}
+
+	fclose(in);
+	system("pause");
+	return 0;
+}
