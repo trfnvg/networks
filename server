@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
 		cout << "Client Connected!\n";
 
 		int file_length;
-		char file_name[11];
+		char file_name[10];
 		if (recv(newConnection, file_name, sizeof(file_name), NULL) < 0) // получаем на сервер имя файла
 		{
 			cout << "Transmission error" << endl;
