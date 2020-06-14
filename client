@@ -5,11 +5,11 @@
 #include <stdio.h>
 using namespace std;
 
-int main(int argc, char* argv[]) 
+int main(int argc, char* argv[])
 {
 	WSAData wsaData;
 	WORD DLLVersion = MAKEWORD(2, 1);
-	if (WSAStartup(DLLVersion, &wsaData) != 0) 
+	if (WSAStartup(DLLVersion, &wsaData) != 0)
 	{
 		cout << "Error" << endl;
 		return -1;
@@ -22,13 +22,13 @@ int main(int argc, char* argv[])
 	addr.sin_family = AF_INET;
 
 	SOCKET Connection = socket(AF_INET, SOCK_STREAM, NULL); // создаем сокет для соединения с сервером
-	if (connect(Connection, (SOCKADDR*)&addr, sizeof(addr)) != 0) 
+	if (connect(Connection, (SOCKADDR*)&addr, sizeof(addr)) != 0)
 	{
 		std::cout << "Error: failed connect to server.\n";
 		return -1;
 	}
 	cout << "Connected!\n";
-	
+
 	char file_name[10] = "photo.png";
 
 	FILE* in = fopen("photo.png", "rb"); // открываем бинарник для чтения 
@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
 	int file_start = ftell(in);
 	int file_length = file_end - file_start;
 
-	
+
 	if (send(Connection, file_name, sizeof(file_name), NULL) < 0) // отправляем название файла
 	{
 		cout << "Request failed" << endl;
@@ -56,26 +56,26 @@ int main(int argc, char* argv[])
 		cout << "Request failed" << endl;
 		return -1;
 	}
-	
+
 	// Для передачи бинарника на сервер разобьем его на равные части по 256 байтов и вычислим остаток от деления длины на 256
 	int total = file_length / 512;
 	int remains = file_length % 512;
 
 	char part[512];
 	char a;
-	
+
 	fseek(in, 0, SEEK_SET);
 	int pointer = 0;
 	for (int i = 0; i < total; i++)
 	{
 		for (int j = 0; j < 512; j++)
-		{  
+		{
 			fread((char*)&a, sizeof(char), 1, in);
 			part[j] = a;
 			pointer++;
 			fseek(in, pointer, SEEK_SET);
 		}
-		if (send(Connection, part, sizeof(part), NULL) < 0) 
+		if (send(Connection, part, sizeof(part), NULL) < 0)
 		{
 			cout << "Sending error" << endl;
 			return -1;
@@ -84,31 +84,22 @@ int main(int argc, char* argv[])
 
 	if (remains != 0)
 	{
-		for (int i = 0; i < remains; i++) 
+		for (int i = 0; i < remains; i++)
 		{
 			fread((char*)&a, sizeof(char), 1, in);
 			part[i] = a;
 			pointer++;
 			fseek(in, pointer, SEEK_SET);
 		}
-		if (send(Connection, part, sizeof(part), NULL) < 0) 
+		if (send(Connection, part, sizeof(part), NULL) < 0)
 		{
 			cout << "Sending error" << endl;
 			return -1;
 		}
 	}
 
-	int width, length, bits_per_pixel, png;
-	if (recv(Connection, (char*)&png, sizeof(int), NULL) < 0)
-	{
-		cout << "Transmission error" << endl;
-		return -1;
-	}
-	if (png == 1)
-	{
-		cout << "This is png format" << endl;
-	}
-	else { cout << "This is not png format" << endl; return -1; }
+	int width, length, bits_per_pixel;
+	
 	if (recv(Connection, (char*)&width, sizeof(int), NULL) < 0)
 	{
 		cout << "Transmission error" << endl;
@@ -118,13 +109,13 @@ int main(int argc, char* argv[])
 	if (recv(Connection, (char*)&length, sizeof(int), NULL) < 0)
 	{
 		cout << "Transmission error" << endl;
-			return -1;
+		return -1;
 	}
 	cout << "length is - " << length << endl;
 	if (recv(Connection, (char*)&bits_per_pixel, sizeof(int), NULL) < 0)
 	{
 		cout << "Transmission error" << endl;
-			return -1;
+		return -1;
 	}
 	cout << "bpp is - " << bits_per_pixel << endl;
 
