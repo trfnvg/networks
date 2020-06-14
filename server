@@ -13,12 +13,12 @@ uint32_t swap_byte32(uint32_t word)
 	return (((word & 0xFF) << 24) | ((word & 0xFF00) << 8) | ((word & 0xFF0000) >> 8) | ((word & 0xFF000000) >> 24));
 }
 
-void Function(FILE* in, int& width, int& length, int& bits_per_pixel, int& png, uint8_t& bit_depth, uint8_t& color_type, uint8_t& compression_method, uint8_t& filter_method, uint8_t& interlace_method)
+void Function(FILE* in, int& width, int& length, int& bits_per_pixel, uint8_t& bit_depth, uint8_t& color_type, uint8_t& compression_method, uint8_t& filter_method, uint8_t& interlace_method)
 {
 	uint16_t d; uint8_t c[5], f[4]; int channels;
 	fseek(in, 1, SEEK_SET);     // Проверяем на PNG-формат
 	fread(f, sizeof(uint8_t), 3, in);
-	if (f[0] == 80 && f[1] == 78 && f[2] == 71) { png++; }
+	if (f[0] == 80 && f[1] == 78 && f[2] == 71) { cout << "This is really a png file" << endl; }
 	fseek(in, 18, SEEK_SET);              //Выводим размеры изображения
 	fread(&d, sizeof(uint16_t), 2, in);
 	length = swap_byte16(d);
@@ -35,29 +35,29 @@ void Function(FILE* in, int& width, int& length, int& bits_per_pixel, int& png, 
 	switch (c[1])
 	{
 	case 0:
-		channels = 1; 
+		channels = 1;
 		bits_per_pixel = channels * c[0] / 8;
 		break;
 	case 2:
-		channels = 3; 
+		channels = 3;
 		bits_per_pixel = channels * c[0] / 8;
 		break;
 	case 3:
-		channels = 1; 
+		channels = 1;
 		bits_per_pixel = channels * c[0] / 8;
 		break;
 	case 4:
-		channels = 2;  
+		channels = 2;
 		bits_per_pixel = channels * c[0] / 8;
 		break;
 	case 6:
-		channels = 4;  
+		channels = 4;
 		bits_per_pixel = channels * c[0] / 8;
 	}
 }
 
 
-int main(int argc, char* argv[]) 
+int main(int argc, char* argv[])
 {
 	WSAData wsaData; //создаем структуру wsa data
 	WORD DLLVersion = MAKEWORD(2, 1); // запрашиваемая версия библиотеки winsock
@@ -67,8 +67,8 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-    // Заполним информацию об адресе сокета
-	SOCKADDR_IN addr; 
+	// Заполним информацию об адресе сокета
+	SOCKADDR_IN addr;
 	int sizeofaddr = sizeof(addr);
 	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 	addr.sin_port = htons(1111);
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
 			cout << "Transmission error" << endl;
 			return -1;
 		}
-		
+
 		FILE* out = fopen("photo1.png", "wb"); // открываем бинарник для записи 
 		if (out == NULL)
 		{
@@ -148,25 +148,31 @@ int main(int argc, char* argv[])
 				fseek(out, pointer, SEEK_SET);
 			}
 		}
+		fseek(out, 0, SEEK_END); // Проверим полностью ли записался бинарник
+		int file_end = ftell(out);
+		fseek(out, 0, SEEK_SET);
+		int file_start = ftell(out);
+		int file_length_1 = file_end - file_start;
+		if (file_length_1 == file_length)
+		{
+			cout << "The file was accepted without losing packets" << endl;
+		}
 		fclose(out);
 	}
-	
+
 	FILE* in = fopen("photo1.png", "rb"); //открываем бинарник для чтения 
 	if (in == NULL)
 	{
 		printf("File opening error \n");
 		return -1;
 	}
-	int width, length, bits_per_pixel, png = 0;
+	
+	int width, length, bits_per_pixel;
 	uint8_t bit_depth, color_type, compression_method, filter_method, interlace_method;
 
-	Function(in, width, length, bits_per_pixel, png, bit_depth, color_type, compression_method, filter_method, interlace_method);
+	Function(in, width, length, bits_per_pixel, bit_depth, color_type, compression_method, filter_method, interlace_method);
 
-	if (send(newConnection, (const char*)&png, sizeof(int), NULL) < 0)
-	{
-		cout << "Sending error" << endl;
-		return -1;
-	}
+
 	if (send(newConnection, (const char*)&width, sizeof(int), NULL) < 0)
 	{
 		cout << "Sending error" << endl;
